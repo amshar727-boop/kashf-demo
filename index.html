@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Kashf v10.9.2</title>
+<title>Kashf v10.9.3</title>
 <style>
 :root{
   --teal:#075e55; --teal2:#0b7468; --mint:#e9f4ef; --bg:#f5f8f6;
@@ -5539,6 +5539,84 @@ const KashfTestV1=(()=>{
   document.addEventListener('click',()=>setTimeout(hookModules,50));
 
   window.KashfPilotCentralEvents1092={emit,session};
+})();
+</script>
+
+
+<style id="v1093-reset-style">
+#pilotResetFab{
+  position:fixed;left:18px;bottom:calc(92px + env(safe-area-inset-bottom));
+  z-index:2500;border:0;border-radius:999px;padding:12px 16px;
+  background:#fff;color:#075e55;border:2px solid #075e55;
+  font-weight:1000;box-shadow:0 8px 26px rgba(0,0,0,.12)
+}
+#pilotResetSheet{
+  display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);
+  align-items:flex-end
+}
+#pilotResetSheet.open{display:flex}
+#pilotResetBox{
+  width:100%;background:#fff;border-radius:24px 24px 0 0;padding:22px 18px 34px;
+  direction:rtl
+}
+#pilotResetBox h3{margin:0 0 8px;font-size:22px}
+#pilotResetBox p{color:#74827e;line-height:1.7}
+.pilot-reset-actions{display:flex;gap:10px;margin-top:14px}
+.pilot-reset-actions button{flex:1;padding:14px;border-radius:12px;font-weight:1000}
+#pilotResetConfirm{border:0;background:#075e55;color:#fff}
+#pilotResetCancel{background:#fff;color:#075e55;border:1px solid #bfd2cc}
+</style>
+
+<button id="pilotResetFab" type="button">بدء تجربة جديدة</button>
+
+<div id="pilotResetSheet">
+  <div id="pilotResetBox">
+    <h3>بدء تجربة جديدة</h3>
+    <p>سيتم مسح بيانات الاختبار المحفوظة على هذا الجهاز فقط، ثم إعادة فتح البداية كمستخدم جديد.</p>
+    <div class="pilot-reset-actions">
+      <button id="pilotResetConfirm" type="button">ابدأ من البداية</button>
+      <button id="pilotResetCancel" type="button">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script id="v1093-reset-pilot">
+(function(){
+  const fab=document.getElementById('pilotResetFab');
+  const sheet=document.getElementById('pilotResetSheet');
+  const confirmBtn=document.getElementById('pilotResetConfirm');
+  const cancelBtn=document.getElementById('pilotResetCancel');
+
+  if(!fab||!sheet) return;
+
+  fab.addEventListener('click',()=>sheet.classList.add('open'));
+  cancelBtn.addEventListener('click',()=>sheet.classList.remove('open'));
+  sheet.addEventListener('click',e=>{if(e.target===sheet)sheet.classList.remove('open')});
+
+  confirmBtn.addEventListener('click',()=>{
+    try{
+      const preserve=[];
+      const keys=[];
+      for(let i=0;i<localStorage.length;i++) keys.push(localStorage.key(i));
+      keys.forEach(k=>{
+        if(!k) return;
+        if(
+          k.startsWith('kashf_') ||
+          k.toLowerCase().includes('kashf') ||
+          k.toLowerCase().includes('onboard') ||
+          k.toLowerCase().includes('profile') ||
+          k.toLowerCase().includes('pilot')
+        ){
+          localStorage.removeItem(k);
+        }
+      });
+      sessionStorage.clear();
+    }catch(e){}
+    try{
+      if(location.hash) history.replaceState(null,'',location.pathname+location.search);
+    }catch(e){}
+    location.reload();
+  });
 })();
 </script>
 
