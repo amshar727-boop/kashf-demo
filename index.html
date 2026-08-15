@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Kashf v10.9.1</title>
+<title>Kashf v10.9.2</title>
 <style>
 :root{
   --teal:#075e55; --teal2:#0b7468; --mint:#e9f4ef; --bg:#f5f8f6;
@@ -5418,6 +5418,127 @@ const KashfTestV1=(()=>{
    KashfPilotV108.__central=true;
  },1500);
  window.KashfPilotCentral={endpoint:ENDPOINT,send};
+})();
+</script>
+
+
+<script id="v1092-central-event-fix">
+(function(){
+  const CENTRAL = 'https://txrsdmmlnztsbskubhlr.supabase.co/functions/v1/kashf-pilot-ingest';
+
+  function session(){
+    try{
+      const all = JSON.parse(localStorage.getItem('kashf_pilot_v108_sessions') || '[]');
+      return all.slice().reverse().find(x=>!x.endedAt) || all[all.length-1] || null;
+    }catch(e){ return null; }
+  }
+
+  async function emit(eventName, metadata={}){
+    const s = session();
+    if(!s) return false;
+    try{
+      const res = await fetch(CENTRAL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          action:'event',
+          sessionId:s.sessionId,
+          participantId:s.participant,
+          startedAt:new Date(s.startedAt).toISOString(),
+          eventName,
+          eventAt:new Date().toISOString(),
+          metadata
+        }),
+        keepalive:true
+      });
+      return res.ok;
+    }catch(e){ return false; }
+  }
+
+  const once = new Set();
+  function emitOnce(key, name, meta={}){
+    const s=session(); if(!s) return;
+    const k=s.sessionId+':'+key;
+    if(once.has(k)) return;
+    once.add(k);
+    emit(name,meta);
+  }
+
+  document.addEventListener('click', (e)=>{
+    const t=e.target.closest('button,a,[onclick]');
+    if(!t || !session()) return;
+    const text=(t.textContent||'').replace(/\s+/g,' ').trim().slice(0,120);
+
+    if(/Kashf Health|Health|درجتك|المؤشر/.test(text))
+      emitOnce('health','health_viewed',{label:text});
+
+    if(/التوصيات|أفضل قرار|مركز القرار/.test(text))
+      emitOnce('recommend','recommendation_viewed',{label:text});
+
+    if(/جرّب القرار|شغّل المحاكاة|المحاكاة|Simulator/.test(text))
+      emit('simulation_used',{label:text});
+
+    if(/أضفه إلى خطتي|أضف.*الخطة|خطة 30\/60\/90/.test(text))
+      emit('plan_added',{label:text});
+
+    if(/تفاصيل|بطاقة|البطاقات|تمويل|البنوك|منتج/.test(text))
+      emit('product_viewed',{label:text});
+  }, true);
+
+  window.addEventListener('hashchange', ()=>{
+    if(!session()) return;
+    const hash=(location.hash||'').toLowerCase();
+    if(hash.includes('recommend')) emitOnce('recommend_hash','recommendation_viewed',{page:hash});
+    if(hash.includes('card')||hash.includes('finance')||hash.includes('bank'))
+      emit('product_viewed',{page:hash});
+  });
+
+  // Hook known modules directly as a second reliable layer.
+  function hookModules(){
+    try{
+      if(window.KashfDecisionV102 && !KashfDecisionV102.__centralEvents1092){
+        const o=KashfDecisionV102.open;
+        KashfDecisionV102.open=function(){
+          emitOnce('decision_center','decision_center_opened');
+          return o.apply(this,arguments);
+        };
+        const a=KashfDecisionV102.add;
+        KashfDecisionV102.add=function(){
+          emit('plan_added',{source:'decision_center'});
+          return a.apply(this,arguments);
+        };
+        KashfDecisionV102.__centralEvents1092=true;
+      }
+    }catch(e){}
+
+    try{
+      if(window.KashfSimulatorV101 && !KashfSimulatorV101.__centralEvents1092){
+        const r=KashfSimulatorV101.run;
+        KashfSimulatorV101.run=function(){
+          emit('simulation_used',{source:'simulator'});
+          return r.apply(this,arguments);
+        };
+        KashfSimulatorV101.__centralEvents1092=true;
+      }
+    }catch(e){}
+
+    try{
+      if(window.KashfOnboardingV107 && !KashfOnboardingV107.__centralEvents1092){
+        const f=KashfOnboardingV107.finish;
+        KashfOnboardingV107.finish=function(){
+          const out=f.apply(this,arguments);
+          emitOnce('onboarding','onboarding_completed');
+          return out;
+        };
+        KashfOnboardingV107.__centralEvents1092=true;
+      }
+    }catch(e){}
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(hookModules,1300));
+  document.addEventListener('click',()=>setTimeout(hookModules,50));
+
+  window.KashfPilotCentralEvents1092={emit,session};
 })();
 </script>
 
