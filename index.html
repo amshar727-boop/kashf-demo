@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Kashf v10.9.3</title>
+<title>Kashf v10.9.4</title>
 <style>
 :root{
   --teal:#075e55; --teal2:#0b7468; --mint:#e9f4ef; --bg:#f5f8f6;
@@ -5617,6 +5617,167 @@ const KashfTestV1=(()=>{
     }catch(e){}
     location.reload();
   });
+})();
+</script>
+
+
+<script id="v1094-reliable-central-tracker">
+(function(){
+  const ENDPOINT='https://txrsdmmlnztsbskubhlr.supabase.co/functions/v1/kashf-pilot-ingest';
+  const QKEY='kashf_pilot_v1094_event_queue';
+  const SENT='kashf_pilot_v1094_sent';
+
+  function sessions(){
+    try{return JSON.parse(localStorage.getItem('kashf_pilot_v108_sessions')||'[]')}catch(e){return []}
+  }
+  function currentSession(){
+    const a=sessions();
+    return a.slice().reverse().find(x=>!x.endedAt) || null;
+  }
+  function queue(){try{return JSON.parse(localStorage.getItem(QKEY)||'[]')}catch(e){return []}}
+  function saveQueue(q){try{localStorage.setItem(QKEY,JSON.stringify(q.slice(-250)))}catch(e){}}
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,9)}
+
+  async function post(payload){
+    try{
+      const r=await fetch(ENDPOINT,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true,
+        cache:'no-store'
+      });
+      return r.ok;
+    }catch(e){return false}
+  }
+
+  let flushing=false;
+  async function flush(){
+    if(flushing) return;
+    flushing=true;
+    try{
+      let q=queue();
+      while(q.length){
+        const item=q[0];
+        const ok=await post(item.payload);
+        if(!ok) break;
+        q.shift(); saveQueue(q);
+      }
+    }finally{flushing=false}
+  }
+
+  function emit(eventName,metadata={}){
+    const s=currentSession();
+    if(!s) return false;
+    const payload={
+      action:'event',
+      sessionId:s.sessionId,
+      participantId:s.participant,
+      startedAt:new Date(s.startedAt).toISOString(),
+      eventName,
+      eventAt:new Date().toISOString(),
+      metadata:{...metadata,tracker:'v10.9.4'}
+    };
+    const q=queue();q.push({id:uid(),payload});saveQueue(q);flush();
+    return true;
+  }
+
+  const once=new Set();
+  function emitOnce(key,name,metadata={}){
+    const s=currentSession();if(!s)return false;
+    const k=s.sessionId+':'+key;
+    if(once.has(k))return false;
+    once.add(k);return emit(name,metadata);
+  }
+
+  function wrap(obj,name,wrapperFlag,fn){
+    if(!obj || typeof obj[name]!=='function' || obj[wrapperFlag]) return;
+    const old=obj[name];
+    obj[name]=function(){return fn.call(this,old,arguments)};
+    obj[wrapperFlag]=true;
+  }
+
+  function hook(){
+    // Core navigation: source-of-truth for page changes.
+    if(typeof window.showPage==='function' && !window.showPage.__v1094){
+      const old=window.showPage;
+      const wrapped=function(name){
+        const r=old.apply(this,arguments);
+        emit('page_viewed',{page:name});
+        if(name==='credit') emitOnce('health','health_viewed',{source:'showPage',page:name});
+        if(name==='recommendations') emitOnce('recommendations','recommendation_viewed',{source:'showPage',page:name});
+        if(['cards','finance','banking'].includes(name)) emit('product_section_viewed',{section:name});
+        return r;
+      };
+      wrapped.__v1094=true;
+      window.showPage=wrapped;
+    }
+
+    // Decision Center actual functions.
+    if(window.KashfDecisionV102){
+      wrap(KashfDecisionV102,'open','__v1094_open',function(old,args){
+        emitOnce('decision-center','decision_center_opened',{source:'function'});
+        return old.apply(this,args);
+      });
+      wrap(KashfDecisionV102,'test','__v1094_test',function(old,args){
+        emit('decision_tested',{index:Number(args[0])||0});
+        return old.apply(this,args);
+      });
+      wrap(KashfDecisionV102,'add','__v1094_add',function(old,args){
+        emit('plan_added',{source:'decision_center',index:Number(args[0])||0});
+        return old.apply(this,args);
+      });
+    }
+
+    // Simulator actual functions.
+    if(window.KashfSimulatorV101){
+      wrap(KashfSimulatorV101,'open','__v1094_open',function(old,args){
+        emit('simulation_opened',{source:'function'});
+        return old.apply(this,args);
+      });
+      wrap(KashfSimulatorV101,'run','__v1094_run',function(old,args){
+        emit('simulation_used',{source:'function'});
+        return old.apply(this,args);
+      });
+    }
+
+    // Onboarding actual completion.
+    if(window.KashfOnboardingV107){
+      wrap(KashfOnboardingV107,'finish','__v1094_finish',function(old,args){
+        const r=old.apply(this,args);
+        setTimeout(()=>emitOnce('onboarding','onboarding_completed',{source:'function'}),30);
+        return r;
+      });
+    }
+
+    // Product detail function, regardless of which earlier definition won.
+    if(typeof window.openProductDetail==='function' && !window.openProductDetail.__v1094){
+      const old=window.openProductDetail;
+      const wrapped=function(key){
+        emit('product_viewed',{product_key:String(key||'unknown'),source:'openProductDetail'});
+        return old.apply(this,arguments);
+      };
+      wrapped.__v1094=true;
+      window.openProductDetail=wrapped;
+    }
+  }
+
+  // Generic click fallback: records interactions, but funnel relies on function hooks above.
+  document.addEventListener('click',e=>{
+    if(!currentSession()) return;
+    const t=e.target.closest('button,a,[onclick]');if(!t)return;
+    const label=(t.textContent||'').replace(/\s+/g,' ').trim().slice(0,100);
+    if(label) emit('interaction',{label});
+    setTimeout(hook,0);
+  },true);
+
+  window.addEventListener('online',flush);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')flush()});
+  setInterval(()=>{hook();flush()},1500);
+  document.addEventListener('DOMContentLoaded',()=>{hook();flush()});
+  setTimeout(()=>{hook();flush()},300);
+
+  window.KashfTrackerV1094={emit,emitOnce,flush,currentSession};
 })();
 </script>
 
