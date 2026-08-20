@@ -1,0 +1,53 @@
+name: Restore v10.42 finance and cards
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/restore-v1042-sections.yml'
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build legacy section pages and wire preview
+        shell: python
+        run: |
+          import re, subprocess, pathlib
+          root=pathlib.Path('.')
+          old=subprocess.check_output(['git','show','9ac01cfcca53160c7d257dc60e2f87653c599dea:index.html'], text=True)
+          current=(root/'v11-preview.html').read_text()
+
+          # Remove the old forced-reset script so the legacy views don't wipe v11 data.
+          old=re.sub(r'<script id="v1030-open-reset">.*?</script>','',old,flags=re.S)
+
+          bridge='''<script id="v11-bridge">(function(){try{const p=JSON.parse(localStorage.getItem('kashf_v11_profile')||'{}');if(p&&Object.keys(p).length){const old={income:+p.income||0,expenses:+p.expenses||0,cash:+p.cash||0,emergency:+p.emergency||0,emergencyFund:+p.emergency||0,score:+p.simahScore||650,creditScore:+p.simahScore||650,goal:p.goal||'خفض الديون',loans:(p.finances||[]).map(x=>({type:x.type||'تمويل شخصي',balance:+x.balance||0,payment:+x.monthly||((+x.installments||0)?(+x.balance||0)/(+x.installments):0),monthly:+x.monthly||0,months:+x.installments||0,apr:4.5})),cards:(p.cards||[]).map(c=>({name:c.name||'بطاقة ائتمانية',balance:+c.used||0,used:+c.used||0,limit:+c.limit||0}))};localStorage.setItem('kashf_profile',JSON.stringify(old));localStorage.setItem('kashf_onboarding_v107_done','1')}}catch(e){}})();</script>'''
+          old=old.replace('</head>',bridge+'</head>',1)
+
+          def legacy(target):
+            css='''<style id="v11-legacy-shell">.topbar,.bottom,.bottom-nav,#drawer,#overlay,#v107Onboarding,#v108PilotPanel,#kashfTestPanel,#kashfLangSwitch{display:none!important}body{padding-bottom:0!important;background:#f7faf8!important}.page{max-width:760px!important;margin:auto!important}html,body{min-height:100%}</style>'''
+            js=f'''<script id="v11-force-{target}">(function(){{function go(){{try{{if(typeof showPage==='function')showPage('{target}');}}catch(e){{}}document.querySelectorAll('.page').forEach(x=>{{const yes=x.id==='page-{target}';x.classList.toggle('active',yes);x.style.display=yes?'block':'none';}});}}document.addEventListener('DOMContentLoaded',()=>setTimeout(go,900));window.addEventListener('load',()=>setTimeout(go,1200));setInterval(go,1800);}})();</script>'''
+            return old.replace('</head>',css+'</head>',1).replace('</body>',js+'</body>',1)
+
+          (root/'legacy-finance.html').write_text(legacy('finance'))
+          (root/'legacy-cards.html').write_text(legacy('cards'))
+
+          frame_css='<style id="legacy-frame-css">.legacy-frame{width:100%;height:calc(100vh - 152px);min-height:650px;border:0;background:#f7faf8;display:block}</style>'
+          if 'id="legacy-frame-css"' not in current:
+            current=current.replace('</head>',frame_css+'</head>',1)
+
+          finance='<section id="finance" class="page"><iframe class="legacy-frame" src="legacy-finance.html#finance" title="قسم التمويل"></iframe></section>'
+          cards='<section id="cards" class="page"><iframe class="legacy-frame" src="legacy-cards.html#cards" title="قسم البطاقات"></iframe></section>'
+          current=re.sub(r'<section id="finance" class="page">.*?</section>\s*<section id="cards" class="page">',finance+'<section id="cards" class="page">',current,flags=re.S)
+          current=re.sub(r'<section id="cards" class="page">.*?</section>\s*<section id="banks" class="page">',cards+'<section id="banks" class="page">',current,flags=re.S)
+          (root/'v11-preview.html').write_text(current)
+      - name: Commit generated legacy sections
+        run: |
+          git config user.name "Kashf Bot"
+          git config user.email "actions@github.com"
+          git add v11-preview.html legacy-finance.html legacy-cards.html
+          git diff --cached --quiet || git commit -m "Restore v10.42 finance and card sections in v11"
+          git push
