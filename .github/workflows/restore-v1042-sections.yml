@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Build legacy section pages and wire preview
+      - name: Build seamless legacy sections and wire preview
         shell: python
         run: |
           import re, subprocess, pathlib
@@ -21,33 +21,65 @@ jobs:
           old=subprocess.check_output(['git','show','9ac01cfcca53160c7d257dc60e2f87653c599dea:index.html'], text=True)
           current=(root/'v11-preview.html').read_text()
 
-          # Remove the old forced-reset script so the legacy views don't wipe v11 data.
+          # Keep the proven v10.42 finance/cards logic, but remove state reset.
           old=re.sub(r'<script id="v1030-open-reset">.*?</script>','',old,flags=re.S)
 
-          bridge='''<script id="v11-bridge">(function(){try{const p=JSON.parse(localStorage.getItem('kashf_v11_profile')||'{}');if(p&&Object.keys(p).length){const old={income:+p.income||0,expenses:+p.expenses||0,cash:+p.cash||0,emergency:+p.emergency||0,emergencyFund:+p.emergency||0,score:+p.simahScore||650,creditScore:+p.simahScore||650,goal:p.goal||'خفض الديون',loans:(p.finances||[]).map(x=>({type:x.type||'تمويل شخصي',balance:+x.balance||0,payment:+x.monthly||((+x.installments||0)?(+x.balance||0)/(+x.installments):0),monthly:+x.monthly||0,months:+x.installments||0,apr:4.5})),cards:(p.cards||[]).map(c=>({name:c.name||'بطاقة ائتمانية',balance:+c.used||0,used:+c.used||0,limit:+c.limit||0}))};localStorage.setItem('kashf_profile',JSON.stringify(old));localStorage.setItem('kashf_onboarding_v107_done','1')}}catch(e){}})();</script>'''
+          bridge='''<script id="v11-bridge">(function(){
+          function sync(raw){try{
+            if(!raw)raw=localStorage.getItem('kashf_v11_profile')||'{}';
+            const p=JSON.parse(raw);if(!p||!Object.keys(p).length)return;
+            const legacy={income:+p.income||0,expenses:+p.expenses||0,cash:+p.cash||0,emergency:+p.emergency||0,emergencyFund:+p.emergency||0,score:+p.simahScore||650,creditScore:+p.simahScore||650,goal:p.goal||'خفض الديون',loans:(p.finances||[]).map(x=>({type:x.type||'تمويل شخصي',balance:+x.balance||0,remaining:+x.balance||0,payment:+x.monthly||((+x.installments||0)?(+x.balance||0)/(+x.installments):0),monthly:+x.monthly||0,months:+x.installments||0,installments:+x.installments||0,apr:+x.apr||4.5})),cards:(p.cards||[]).map(c=>({name:c.name||'بطاقة ائتمانية',balance:+c.used||0,used:+c.used||0,limit:+c.limit||0}))};
+            localStorage.setItem('kashf_profile',JSON.stringify(legacy));localStorage.setItem('kashf_onboarding_v107_done','1');
+            try{window.KashfDynamicV1017?.refresh?.()}catch(e){}try{window.KashfEngine?.refresh?.()}catch(e){}try{if(typeof refreshDashboard==='function')refreshDashboard()}catch(e){}
+          }catch(e){}}
+          sync();
+          window.addEventListener('message',e=>{if(e.data&&e.data.type==='kashf-profile-updated')sync(e.data.profile)});
+          window.addEventListener('storage',e=>{if(e.key==='kashf_v11_profile')sync(e.newValue)});
+          window.KashfLegacyBridge={sync};
+          })();</script>'''
           old=old.replace('</head>',bridge+'</head>',1)
 
           def legacy(target):
-            css='''<style id="v11-legacy-shell">.topbar,.bottom,.bottom-nav,#drawer,#overlay,#v107Onboarding,#v108PilotPanel,#kashfTestPanel,#kashfLangSwitch{display:none!important}body{padding-bottom:0!important;background:#f7faf8!important}.page{max-width:760px!important;margin:auto!important}html,body{min-height:100%}</style>'''
-            js=f'''<script id="v11-force-{target}">(function(){{function go(){{try{{if(typeof showPage==='function')showPage('{target}');}}catch(e){{}}document.querySelectorAll('.page').forEach(x=>{{const yes=x.id==='page-{target}';x.classList.toggle('active',yes);x.style.display=yes?'block':'none';}});}}document.addEventListener('DOMContentLoaded',()=>setTimeout(go,900));window.addEventListener('load',()=>setTimeout(go,1200));setInterval(go,1800);}})();</script>'''
+            css='''<style id="v11-legacy-shell">
+            html.v11-embed,html.v11-embed body{background:#f7faf8!important;overscroll-behavior:contain}
+            .topbar,.bottom,.bottom-nav,#bottomNav,#drawer,#overlay,#v107Onboarding,#v108PilotPanel,#kashfTestPanel,#kashfLangSwitch,.menu,[id*="pilot" i]{display:none!important}
+            body{padding-bottom:0!important}.page{max-width:760px!important;margin:auto!important;min-height:auto!important}html,body{min-height:100%}
+            </style>'''
+            js=f'''<script id="v11-force-{target}">(function(){{
+              document.documentElement.classList.add('v11-embed');
+              function go(){{try{{if(typeof showPage==='function')showPage('{target}');}}catch(e){{}}document.querySelectorAll('.page').forEach(x=>{{const yes=x.id==='page-{target}';x.classList.toggle('active',yes);x.style.display=yes?'block':'none';}});try{{window.KashfLegacyBridge?.sync?.()}}catch(e){{}}}}
+              document.addEventListener('DOMContentLoaded',()=>setTimeout(go,70));window.addEventListener('load',()=>setTimeout(go,100));
+            }})();</script>'''
             return old.replace('</head>',css+'</head>',1).replace('</body>',js+'</body>',1)
 
           (root/'legacy-finance.html').write_text(legacy('finance'))
           (root/'legacy-cards.html').write_text(legacy('cards'))
 
-          frame_css='<style id="legacy-frame-css">.legacy-frame{width:100%;height:calc(100vh - 152px);min-height:650px;border:0;background:#f7faf8;display:block}</style>'
-          if 'id="legacy-frame-css"' not in current:
+          frame_css='''<style id="legacy-frame-css">.legacy-frame{width:100%;height:calc(100vh - 142px);min-height:650px;border:0;background:#f7faf8;display:block;overscroll-behavior:contain}</style>'''
+          if 'id="legacy-frame-css"' in current:
+            current=re.sub(r'<style id="legacy-frame-css">.*?</style>',frame_css,current,flags=re.S)
+          else:
             current=current.replace('</head>',frame_css+'</head>',1)
 
-          finance='<section id="finance" class="page"><iframe class="legacy-frame" src="legacy-finance.html#finance" title="قسم التمويل"></iframe></section>'
-          cards='<section id="cards" class="page"><iframe class="legacy-frame" src="legacy-cards.html#cards" title="قسم البطاقات"></iframe></section>'
+          finance='<section id="finance" class="page"><iframe class="legacy-frame" src="legacy-finance.html#finance" loading="lazy" title="قسم التمويل"></iframe></section>'
+          cards='<section id="cards" class="page"><iframe class="legacy-frame" src="legacy-cards.html#cards" loading="lazy" title="قسم البطاقات"></iframe></section>'
           current=re.sub(r'<section id="finance" class="page">.*?</section>\s*<section id="cards" class="page">',finance+'<section id="cards" class="page">',current,flags=re.S)
           current=re.sub(r'<section id="cards" class="page">.*?</section>\s*<section id="banks" class="page">',cards+'<section id="banks" class="page">',current,flags=re.S)
+
+          parent='''<script id="kashf-v11-parent-bridge">(function(){
+          function sync(){const raw=localStorage.getItem('kashf_v11_profile');document.querySelectorAll('.legacy-frame').forEach(f=>{try{f.contentWindow?.postMessage({type:'kashf-profile-updated',profile:raw},location.origin)}catch(e){}})}
+          document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.legacy-frame').forEach(f=>f.addEventListener('load',sync));if('requestIdleCallback' in window)requestIdleCallback(()=>{['legacy-finance.html','legacy-cards.html'].forEach(h=>{const l=document.createElement('link');l.rel='prefetch';l.href=h;document.head.appendChild(l)})});});
+          window.addEventListener('storage',e=>{if(e.key==='kashf_v11_profile')sync()});window.KashfV11Bridge={sync};
+          })();</script>'''
+          if 'id="kashf-v11-parent-bridge"' not in current: current=current.replace('</body>',parent+'</body>',1)
+          current=current.replace("localStorage.setItem(KEY,JSON.stringify(profile));onboard.classList.remove('open')","localStorage.setItem(KEY,JSON.stringify(profile));window.KashfV11Bridge?.sync?.();onboard.classList.remove('open')")
+          current=current.replace("localStorage.setItem(KEY,JSON.stringify(profile));editModal.classList.remove('open')","localStorage.setItem(KEY,JSON.stringify(profile));window.KashfV11Bridge?.sync?.();editModal.classList.remove('open')")
+          current=current.replace("localStorage.setItem(KEY,JSON.stringify(profile));liabilityModal.classList.remove('open')","localStorage.setItem(KEY,JSON.stringify(profile));window.KashfV11Bridge?.sync?.();liabilityModal.classList.remove('open')")
           (root/'v11-preview.html').write_text(current)
-      - name: Commit generated legacy sections
+      - name: Commit generated seamless sections
         run: |
           git config user.name "Kashf Bot"
           git config user.email "actions@github.com"
           git add v11-preview.html legacy-finance.html legacy-cards.html
-          git diff --cached --quiet || git commit -m "Restore v10.42 finance and card sections in v11"
+          git diff --cached --quiet || git commit -m "Optimize v11 finance and cards integration"
           git push
