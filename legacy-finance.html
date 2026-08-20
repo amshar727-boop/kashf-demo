@@ -1284,7 +1284,23 @@ a[onclick*="KashfPilotV108.open"]{
 .v1042-card-help span{display:block;color:#526660;font-size:12px}
 .v1042-card-help small{display:block;color:#7b8884;font-size:11px;margin-top:4px}
 </style>
-<script id="v11-bridge">(function(){try{const p=JSON.parse(localStorage.getItem('kashf_v11_profile')||'{}');if(p&&Object.keys(p).length){const old={income:+p.income||0,expenses:+p.expenses||0,cash:+p.cash||0,emergency:+p.emergency||0,emergencyFund:+p.emergency||0,score:+p.simahScore||650,creditScore:+p.simahScore||650,goal:p.goal||'خفض الديون',loans:(p.finances||[]).map(x=>({type:x.type||'تمويل شخصي',balance:+x.balance||0,payment:+x.monthly||((+x.installments||0)?(+x.balance||0)/(+x.installments):0),monthly:+x.monthly||0,months:+x.installments||0,apr:4.5})),cards:(p.cards||[]).map(c=>({name:c.name||'بطاقة ائتمانية',balance:+c.used||0,used:+c.used||0,limit:+c.limit||0}))};localStorage.setItem('kashf_profile',JSON.stringify(old));localStorage.setItem('kashf_onboarding_v107_done','1')}}catch(e){}})();</script><style id="v11-legacy-shell">.topbar,.bottom,.bottom-nav,#drawer,#overlay,#v107Onboarding,#v108PilotPanel,#kashfTestPanel,#kashfLangSwitch{display:none!important}body{padding-bottom:0!important;background:#f7faf8!important}.page{max-width:760px!important;margin:auto!important}html,body{min-height:100%}</style></head>
+<script id="v11-bridge">(function(){
+function sync(raw){try{
+  if(!raw)raw=localStorage.getItem('kashf_v11_profile')||'{}';
+  const p=JSON.parse(raw);if(!p||!Object.keys(p).length)return;
+  const legacy={income:+p.income||0,expenses:+p.expenses||0,cash:+p.cash||0,emergency:+p.emergency||0,emergencyFund:+p.emergency||0,score:+p.simahScore||650,creditScore:+p.simahScore||650,goal:p.goal||'خفض الديون',loans:(p.finances||[]).map(x=>({type:x.type||'تمويل شخصي',balance:+x.balance||0,remaining:+x.balance||0,payment:+x.monthly||((+x.installments||0)?(+x.balance||0)/(+x.installments):0),monthly:+x.monthly||0,months:+x.installments||0,installments:+x.installments||0,apr:+x.apr||4.5})),cards:(p.cards||[]).map(c=>({name:c.name||'بطاقة ائتمانية',balance:+c.used||0,used:+c.used||0,limit:+c.limit||0}))};
+  localStorage.setItem('kashf_profile',JSON.stringify(legacy));localStorage.setItem('kashf_onboarding_v107_done','1');
+  try{window.KashfDynamicV1017?.refresh?.()}catch(e){}try{window.KashfEngine?.refresh?.()}catch(e){}try{if(typeof refreshDashboard==='function')refreshDashboard()}catch(e){}
+}catch(e){}}
+sync();
+window.addEventListener('message',e=>{if(e.data&&e.data.type==='kashf-profile-updated')sync(e.data.profile)});
+window.addEventListener('storage',e=>{if(e.key==='kashf_v11_profile')sync(e.newValue)});
+window.KashfLegacyBridge={sync};
+})();</script><style id="v11-legacy-shell">
+  html.v11-embed,html.v11-embed body{background:#f7faf8!important;overscroll-behavior:contain}
+  .topbar,.bottom,.bottom-nav,#bottomNav,#drawer,#overlay,#v107Onboarding,#v108PilotPanel,#kashfTestPanel,#kashfLangSwitch,.menu,[id*="pilot" i]{display:none!important}
+  body{padding-bottom:0!important}.page{max-width:760px!important;margin:auto!important;min-height:auto!important}html,body{min-height:100%}
+  </style></head>
 <body>
 <div id="onboardingOverlay" class="hidden">
   <div class="onboard-wrap">
@@ -7937,5 +7953,9 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{bind();render()
  window.KashfFeedbackV1039={finish,retryPending};
 })();
 </script>
-<script id="v11-force-finance">(function(){function go(){try{if(typeof showPage==='function')showPage('finance');}catch(e){}document.querySelectorAll('.page').forEach(x=>{const yes=x.id==='page-finance';x.classList.toggle('active',yes);x.style.display=yes?'block':'none';});}document.addEventListener('DOMContentLoaded',()=>setTimeout(go,900));window.addEventListener('load',()=>setTimeout(go,1200));setInterval(go,1800);})();</script></body>
+<script id="v11-force-finance">(function(){
+    document.documentElement.classList.add('v11-embed');
+    function go(){try{if(typeof showPage==='function')showPage('finance');}catch(e){}document.querySelectorAll('.page').forEach(x=>{const yes=x.id==='page-finance';x.classList.toggle('active',yes);x.style.display=yes?'block':'none';});try{window.KashfLegacyBridge?.sync?.()}catch(e){}}
+    document.addEventListener('DOMContentLoaded',()=>setTimeout(go,70));window.addEventListener('load',()=>setTimeout(go,100));
+  })();</script></body>
 </html>
