@@ -1,0 +1,51 @@
+name: Redesign v11 report
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/redesign-report.yml'
+permissions:
+  contents: write
+jobs:
+  redesign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Redesign report page
+        shell: python
+        run: |
+          import pathlib,re
+          p=pathlib.Path('v11-preview.html')
+          s=p.read_text()
+          css='''<style id="report-v12-style">
+          #report{background:#f7f8f9;min-height:100vh;color:#162d29}
+          #report .head{background:#fff;text-align:center;padding:20px 18px 16px;border-bottom:1px solid #edf0ef}
+          #report .head h1{font-size:24px;margin:0}.report-shell{padding:0 18px 34px!important}
+          .report-topline{margin:0 -18px 30px!important;padding:15px 18px;background:#f4f6f7;font-size:14px!important}
+          .report-section{margin-bottom:34px!important}.report-section h2{font-size:27px!important;margin-bottom:15px!important}
+          .report-kicker{font-size:16px!important;color:#687874!important}.report-big{font-size:42px!important;letter-spacing:-1px}
+          .report-change{background:#fff!important;color:#a45c13!important;box-shadow:0 2px 8px #0a2d2510;font-size:13px!important}
+          .credit-summary-card,.account-card,.report-stat,.address-card,.payment-status{border:0!important;box-shadow:0 3px 13px #173c3212!important;border-radius:18px!important}
+          .credit-summary-card{padding:20px!important}.credit-summary-card h3{font-size:24px!important;text-align:right}
+          .credit-values b{font-size:27px!important}.credit-values span{font-size:14px!important}.util-bar{height:8px!important;background:#dfe4e6!important}.util-bar i{background:#17685d!important}
+          #reportAccounts{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 1px 8px;scrollbar-width:none}#reportAccounts::-webkit-scrollbar{display:none}
+          #reportAccounts .account-card{min-width:82%;scroll-snap-align:start;margin:0!important;padding:18px!important}.account-name{font-size:19px!important}.account-type{font-size:13px!important}.account-kpis span{font-size:13px!important}.account-kpis b{font-size:21px!important}
+          .report-grid2{display:flex!important;overflow-x:auto;gap:12px!important;scroll-snap-type:x mandatory}.report-stat{min-width:62%;text-align:right!important;padding:18px!important;scroll-snap-align:start}.report-stat b{font-size:32px!important}
+          .report-link{margin:12px auto 0;color:#17685d!important;font-size:15px!important}.status-good{background:#e9f6f1!important;color:#17685d!important}
+          #report .edit{border-radius:999px;padding:9px 14px;background:#eaf4f1}
+          @media(max-width:420px){#reportAccounts .account-card{min-width:88%}.report-stat{min-width:70%}.report-big{font-size:39px!important}}
+          </style>'''
+          if 'id="report-v12-style"' not in s:s=s.replace('</head>',css+'</head>',1)
+          # Make the opening hierarchy cleaner and closer to the reference while preserving dynamic ids and actions.
+          s=s.replace('<div class="muted">ملخص ائتماني واضح ومبسط من بياناتك</div>','')
+          s=s.replace('<span>آخر تحديث: الآن</span>','<span>آخر تحديث: <b>الآن</b></span>')
+          s=s.replace('<div class="report-kicker">سجلك الائتماني في سمة</div>','<h2 style="margin-bottom:8px">سجلك الائتماني</h2><div class="report-kicker">درجة سمة الحالية</div>')
+          s=s.replace('<h2>الحسابات الائتمانية</h2>','<h2>حساباتك الائتمانية</h2>')
+          p.write_text(s)
+      - name: Commit redesign
+        run: |
+          git config user.name "Kashf Bot"
+          git config user.email "actions@github.com"
+          git add v11-preview.html
+          git diff --cached --quiet || git commit -m "Redesign report with cleaner credit-app hierarchy"
+          git push
