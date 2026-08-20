@@ -1,22 +1,21 @@
 name: Optimize v11 legacy modules
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
     paths:
       - '.github/workflows/v11-seamless.yml'
 permissions:
   contents: write
 jobs:
   optimize:
-    if: ${{ !contains(github.event.head_commit.message, '[v11-opt]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Make finance and cards seamless inside v11
+        shell: python
         run: |
-          python3 - <<'PY'
           from pathlib import Path
 
           embed = r'''
@@ -36,7 +35,6 @@ html.v11-embed [id*="pilot" i],
 html.v11-embed .menu{display:none!important}
 html.v11-embed .page{max-width:760px!important;margin:0 auto!important;min-height:auto!important}
 html.v11-embed main{padding-top:0!important}
-html.v11-embed *{scroll-behavior:smooth}
 </style>
 <script id="kashf-v11-embed-bridge">
 (function(){
@@ -47,22 +45,7 @@ html.v11-embed *{scroll-behavior:smooth}
       if(!raw) raw=localStorage.getItem('kashf_v11_profile');
       if(!raw)return;
       const p=JSON.parse(raw);
-      const old={
-        income:+p.income||0,
-        expenses:+p.expenses||0,
-        cash:+p.cash||0,
-        emergency:+p.emergency||0,
-        emergencyFund:+p.emergency||0,
-        score:+p.simahScore||650,
-        creditScore:+p.simahScore||650,
-        goal:p.goal||'',
-        loans:(p.finances||[]).map(x=>({
-          type:x.type||'تمويل شخصي',balance:+x.balance||0,remaining:+x.balance||0,
-          payment:+x.monthly||((+x.installments||0)?(+x.balance||0)/(+x.installments):0),
-          monthly:+x.monthly||0,months:+x.installments||0,installments:+x.installments||0
-        })),
-        cards:(p.cards||[]).map(x=>({name:x.name||'بطاقة ائتمانية',limit:+x.limit||0,balance:+x.used||0,used:+x.used||0}))
-      };
+      const old={income:+p.income||0,expenses:+p.expenses||0,cash:+p.cash||0,emergency:+p.emergency||0,emergencyFund:+p.emergency||0,score:+p.simahScore||650,creditScore:+p.simahScore||650,goal:p.goal||'',loans:(p.finances||[]).map(x=>({type:x.type||'تمويل شخصي',balance:+x.balance||0,remaining:+x.balance||0,payment:+x.monthly||((+x.installments||0)?(+x.balance||0)/(+x.installments):0),monthly:+x.monthly||0,months:+x.installments||0,installments:+x.installments||0})),cards:(p.cards||[]).map(x=>({name:x.name||'بطاقة ائتمانية',limit:+x.limit||0,balance:+x.used||0,used:+x.used||0}))};
       localStorage.setItem('kashf_profile',JSON.stringify(old));
       try{window.KashfDynamicV1017?.refresh?.()}catch(e){}
       try{window.KashfEngine?.refresh?.()}catch(e){}
@@ -92,16 +75,8 @@ html.v11-embed *{scroll-behavior:smooth}
             bridge=r'''
 <script id="kashf-v11-parent-bridge">
 (function(){
- function sendProfile(){
-   const raw=localStorage.getItem('kashf_v11_profile');
-   document.querySelectorAll('.legacy-frame').forEach(f=>{try{f.contentWindow?.postMessage({type:'kashf-profile-updated',profile:raw},location.origin)}catch(e){}});
- }
- document.addEventListener('DOMContentLoaded',()=>{
-   document.querySelectorAll('.legacy-frame').forEach(f=>f.addEventListener('load',sendProfile));
-   if('requestIdleCallback' in window)requestIdleCallback(()=>{
-     ['legacy-finance.html','legacy-cards.html'].forEach(h=>{let l=document.createElement('link');l.rel='prefetch';l.href=h;document.head.appendChild(l)});
-   });
- });
+ function sendProfile(){const raw=localStorage.getItem('kashf_v11_profile');document.querySelectorAll('.legacy-frame').forEach(f=>{try{f.contentWindow?.postMessage({type:'kashf-profile-updated',profile:raw},location.origin)}catch(e){}})}
+ document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.legacy-frame').forEach(f=>f.addEventListener('load',sendProfile));if('requestIdleCallback' in window)requestIdleCallback(()=>{['legacy-finance.html','legacy-cards.html'].forEach(h=>{let l=document.createElement('link');l.rel='prefetch';l.href=h;document.head.appendChild(l)})})});
  window.addEventListener('storage',e=>{if(e.key==='kashf_v11_profile')sendProfile()});
  window.KashfV11Bridge={sync:sendProfile};
 })();
@@ -112,12 +87,10 @@ html.v11-embed *{scroll-behavior:smooth}
           s=s.replace("localStorage.setItem(KEY,JSON.stringify(profile));editModal.classList.remove('open')", "localStorage.setItem(KEY,JSON.stringify(profile));window.KashfV11Bridge?.sync?.();editModal.classList.remove('open')")
           s=s.replace("localStorage.setItem(KEY,JSON.stringify(profile));liabilityModal.classList.remove('open')", "localStorage.setItem(KEY,JSON.stringify(profile));window.KashfV11Bridge?.sync?.();liabilityModal.classList.remove('open')")
           p.write_text(s,encoding='utf-8')
-          PY
       - name: Commit optimized integration
         run: |
           git config user.name "Kashf Build Bot"
           git config user.email "actions@users.noreply.github.com"
           git add v11-preview.html legacy-finance.html legacy-cards.html
-          git diff --cached --quiet && exit 0
-          git commit -m "[v11-opt] Seamless finance and cards integration"
+          git diff --cached --quiet || git commit -m "[v11-opt] Seamless finance and cards integration"
           git push
