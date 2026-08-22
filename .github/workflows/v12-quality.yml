@@ -1,0 +1,32 @@
+name: v12 quality checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'v12-validation.html'
+      - 'tests/v12-smoke.mjs'
+      - '.github/workflows/v12-quality.yml'
+  pull_request:
+    paths:
+      - 'v12-validation.html'
+      - 'tests/v12-smoke.mjs'
+      - '.github/workflows/v12-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-v12:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out site
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate v12 critical journey
+        run: node tests/v12-smoke.mjs
