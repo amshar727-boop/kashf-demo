@@ -12,6 +12,15 @@ const required = [
   ['onboarding funnel','validation_onboarding_step'],
   ['subscription intent','subscription_intent'],
   ['completion event','feedback_survey_completed'],
+  ['v12.1 version','version:\'v12.1\''],
+  ['fresh session lifecycle','state.completed||stale'],
+  ['stable participant','kashf_validation_participant'],
+  ['survey duplicate guard','state.surveySubmitted'],
+  ['clarity score','v12SurveyClarity'],
+  ['trust score','v12SurveyTrust'],
+  ['onboarding validation','validateMove'],
+  ['early experience disclosure','تجربة خاصة مبكرة'],
+  ['no fake SIMAH detail','لا نعرض سجل سداد أو استعلامات'],
   ['pilot endpoint','kashf-pilot-ingest']
 ];
 const missing = required.filter(([,needle])=>!html.includes(needle));
