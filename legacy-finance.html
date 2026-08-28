@@ -1813,11 +1813,12 @@ window.KashfLegacyBridge={sync};
       <button class="sf33-more" id="sf33More">تفاصيل أكثر</button>
 
       <div class="sf33-details" id="sf33Details">
-        <div><span>النسبة المستخدمة في التقدير</span><b id="sf33Apr">—</b></div>
+        <div><span>نسبة الربح الثابتة المكافئة</span><b id="sf33Apr">—</b></div>
+        <div><span>إجمالي الربح التقريبي</span><b id="sf33Profit">—</b></div>
         <div><span>إجمالي السداد التقريبي</span><b id="sf33Total">—</b></div>
         <div><span>نسبة الالتزامات بعد التمويل</span><b id="sf33Dbr">—</b></div>
         <div id="sf33BuyoutSavingRow"><span>التوفير الشهري التقريبي</span><b id="sf33Saving">—</b></div>
-        <p>هذه أرقام تقديرية للمقارنة فقط، وليست موافقة أو عرضًا نهائيًا من البنك.</p>
+        <p>يعرض كشف النسبة الثابتة المكافئة لتوحيد المقارنة بين الخيارات. هذه أرقام تقديرية وليست موافقة أو عرضًا نهائيًا من البنك.</p>
       </div>
     </div>
   </div>
@@ -7368,7 +7369,7 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{bind();render()
 (function(){
  const $=id=>document.getElementById(id);
  let type='personal';
- const rates={personal:4.5,auto:5.0,home:4.2,buyout:3.5};
+ const sourceRates={personal:4.5,auto:5.0,home:4.2,buyout:3.5};
 
  function profile(){
    try{
@@ -7384,11 +7385,15 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{bind();render()
  }
  function money(n){return Math.round(Math.max(0,+n||0)).toLocaleString('en-US')+' ر.س'}
  function pmt(P,apr,n){const r=apr/1200;if(!r)return P/n;const q=Math.pow(1+r,n);return P*r*q/(q-1)}
+ function flatRate(P,total,n){
+   const years=n/12;
+   return P>0&&years>0?Math.max(0,(total-P)/P/years*100):0;
+ }
 
  function calculate(){
    const d=profile();
    const months=+$('sf33Term').value||60;
-   const apr=rates[type]||4.5;
+   const sourceRate=sourceRates[type]||4.5;
    let amount=+$('sf33Amount').value||0;
 
    if(type==='buyout'){
@@ -7400,14 +7405,17 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{bind();render()
      $('sf33BuyoutNote').style.display='none';
    }
 
-   const payment=amount>0?pmt(amount,apr,months):0;
+   const payment=amount>0?pmt(amount,sourceRate,months):0;
    const total=payment*months;
+   const profit=Math.max(0,total-amount);
+   const fixedRate=flatRate(amount,total,months);
    const afterMonthly=(d.monthly||0)+(type==='buyout'?0:payment);
    const afterDbr=d.income?afterMonthly/d.income*100:0;
    const saving=type==='buyout' ? (d.monthly||0)-payment : 0;
 
    $('sf33Payment').textContent=amount?money(payment)+' / شهر':'—';
-   $('sf33Apr').textContent=apr.toFixed(1)+'%';
+   $('sf33Apr').textContent=amount?fixedRate.toFixed(2)+'%':'—';
+   $('sf33Profit').textContent=amount?money(profit):'—';
    $('sf33Total').textContent=amount?money(total):'—';
    $('sf33Dbr').textContent=d.income?afterDbr.toFixed(1)+'%':'—';
    $('sf33Saving').textContent=type==='buyout'&&amount?money(saving):'—';
@@ -7605,7 +7613,7 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{bind();render()
 (function(){
  const $=id=>document.getElementById(id);
  const typeNames={personal:'التمويل الشخصي',auto:'تمويل السيارة',home:'التمويل العقاري',buyout:'شراء المديونية'};
- const rates={personal:4.5,auto:5.0,home:4.2,buyout:3.5};
+ const sourceRates={personal:4.5,auto:5.0,home:4.2,buyout:3.5};
 
  function profile(){
    try{ if(window.KashfDynamicV1017?.derive) return window.KashfDynamicV1017.derive(); }catch(e){}
@@ -7617,6 +7625,10 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{bind();render()
    }catch(e){return {income:0,monthly:0,debt:0,health:0,creditScore:0}}
  }
  function pmt(P,apr,n){const r=apr/1200;if(!r)return P/n;const q=Math.pow(1+r,n);return P*r*q/(q-1)}
+ function flatRate(P,total,n){
+   const years=n/12;
+   return P>0&&years>0?Math.max(0,(total-P)/P/years*100):0;
+ }
  function money(n){return Math.round(Math.max(0,+n||0)).toLocaleString('en-US')+' ر.س'}
  function activeType(){
    return document.querySelector('#sf33Types button.active')?.dataset.type||'personal';
@@ -7652,25 +7664,26 @@ document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{bind();render()
    let amount=+$('sf33Amount')?.value||0;
    if(t==='buyout') amount=d.debt||0;
    const months=+$('sf33Term')?.value||60;
-   const base=rates[t]||4.5;
+   const base=sourceRates[t]||4.5;
    const adjustments=health>=80?[-.65,-.25,.15]:health>=65?[-.25,.15,.55]:[.15,.65,1.05];
    const labels=health>=80?['أفضل تطابق','قسط أقل','خيار بديل']:health>=65?['أنسب لك','خيار متوازن','خيار بديل']:['الأقرب لوضعك','للمقارنة','قد يحتاج شروطًا أفضل'];
    const banks=['الخيار أ','الخيار ب','الخيار ج'];
    const offers=adjustments.map((adj,i)=>{
-     const apr=Math.max(1.5,base+adj), pay=amount?pmt(amount,apr,months):0, total=pay*months;
+     const sourceRate=Math.max(1.5,base+adj), pay=amount?pmt(amount,sourceRate,months):0, total=pay*months;
+     const profit=Math.max(0,total-amount), fixedRate=flatRate(amount,total,months);
      const after=d.income?(d.monthly+(t==='buyout'?0:pay))/d.income*100:0;
      const fit=Math.max(45,Math.min(96,Math.round(health+10-i*7-(after>45?10:0))));
-     return {apr,pay,total,fit,label:labels[i],bank:banks[i]};
+     return {fixedRate,pay,total,profit,fit,label:labels[i],bank:banks[i]};
    });
    box.innerHTML='<div class="sf35-head"><h2>خيارات مناسبة لوضعك</h2><p>رتبنا 3 خيارات مبدئية فقط حتى تكون المقارنة أسهل.</p></div>'+
      offers.map((o,i)=>'<article class="sf35-offer">'+
        '<div class="sf35-top"><div><h3>'+typeNames[t]+' — '+o.bank+'</h3><div class="bank">محاكاة تجريبية وليست عرضًا بنكيًا</div></div><span class="sf35-rank">'+o.label+' · '+o.fit+'%</span></div>'+
-       '<div class="sf35-kpis"><div class="sf35-kpi"><span>القسط التقديري</span><b>'+money(o.pay)+'</b></div><div class="sf35-kpi"><span>النسبة السنوية التقديرية</span><b>'+o.apr.toFixed(2)+'%</b></div></div>'+
+       '<div class="sf35-kpis"><div class="sf35-kpi"><span>القسط التقديري</span><b>'+money(o.pay)+'</b></div><div class="sf35-kpi"><span>نسبة الربح الثابتة</span><b>'+o.fixedRate.toFixed(2)+'%</b></div></div>'+
        '<p class="sf35-reason">'+(o.fit>=80?'يتوافق مبدئيًا بشكل جيد مع بياناتك الحالية.':'مفيد للمقارنة، لكن راقب أثر القسط على التزاماتك الشهرية.')+'</p>'+
        '<div class="sf35-actions"><button class="sf35-detail" type="button">التفاصيل</button><button class="sf35-compare" type="button">اختيار للمقارنة</button></div>'+
-       '<div class="sf35-extra"><b>تفاصيل مبسطة</b><br>المدة: '+(months/12)+' سنوات<br>إجمالي السداد التقريبي: '+money(o.total)+'<br>مدى المناسبة محسوب تجريبيًا من بيانات العميل ومؤشر كشف، ولا يعني ضمان الموافقة.</div>'+
+       '<div class="sf35-extra"><b>تفاصيل مبسطة</b><br>المدة: '+(months/12)+' سنوات<br>إجمالي الربح التقريبي: '+money(o.profit)+'<br>إجمالي السداد التقريبي: '+money(o.total)+'<br>النسبة الثابتة محسوبة من إجمالي الربح ومبلغ التمويل والمدة.<br>مدى المناسبة محسوب تجريبيًا من بيانات العميل ومؤشر كشف، ولا يعني ضمان الموافقة.</div>'+
        '</article>').join('')+
-     '<div class="sf35-note">هذه النتائج للتجربة والمقارنة فقط. في النسخة المتصلة بالبنوك ستُستبدل الخيارات التجريبية بعروض وشروط رسمية.</div>';
+     '<div class="sf35-note">يعرض كشف جميع الخيارات كنسب ربح ثابتة مكافئة حتى تكون المقارنة موحّدة. هذه النتائج للتجربة فقط، وستُستبدل لاحقًا بعروض وشروط رسمية.</div>';
    box.querySelectorAll('.sf35-detail').forEach(b=>b.onclick=()=>b.closest('.sf35-offer').querySelector('.sf35-extra').classList.toggle('open'));
    box.classList.add('open');
    setTimeout(()=>box.scrollIntoView({behavior:'smooth',block:'start'}),30);
